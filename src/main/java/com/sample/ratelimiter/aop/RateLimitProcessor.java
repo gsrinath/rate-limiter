@@ -2,6 +2,7 @@ package com.sample.ratelimiter.aop;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
+import java.util.UUID;
 
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -72,13 +73,14 @@ public class RateLimitProcessor implements EnvironmentAware {
 		long startTimeToCheck = methodCallTime - getWindowSecs(rateLimitApiGroup)*1000;
 		long endTimeToCheck = methodCallTime;
 		
-		long currentCount = redisConnection.zSetCommands().zCount(keyBytes, startTimeToCheck, endTimeToCheck);
-		if(currentCount>=getMaxAllowed(rateLimitApiGroup)) {
-			throw new RateLimitException("Too many requests");
-		}
-		redisConnection.zAdd(keyBytes, endTimeToCheck,SerializationUtils.serialize(methodCallTime));
+		UUID uuid = UUID.randomUUID();
+		redisConnection.zAdd(keyBytes, endTimeToCheck,SerializationUtils.serialize(uuid));
 		redisConnection.zSetCommands().zRemRangeByScore(keyBytes, 0, startTimeToCheck);
 		
+		long currentCount = redisConnection.zSetCommands().zCount(keyBytes, startTimeToCheck, endTimeToCheck);
+		if(currentCount>getMaxAllowed(rateLimitApiGroup)) {
+			throw new RateLimitException("Too many requests");
+		}
 		return joinPoint.proceed();
 		
 	}
